@@ -3,6 +3,8 @@ package main
 import java.util.NoSuchElementException
 import scala.compiletime.constValue
 import scala.compiletime.ops.any.{!=, ToString}
+import scala.compiletime.ops.int.-
+import scala.compiletime.ops.string.+ as ++
 
 /**
   * Typeful representation of a binding environment/context
@@ -62,7 +64,7 @@ sealed trait Env[+V] extends Map[Env.IDTop, V]:
   infix def mergedWith[W >: V, S2 <: KVList](that: Env[W]{ type Shape = S2 })
   (using AreDisjoint[Shape, S2] =:= true): Env[W]{ type Shape = Merged[Env.this.Shape, S2] }
 
-  override def toString: String = s"Env{${representation.elementString}}"
+  override def toString: String = s"{${representation.elementString}}"
 
   override def equals(o: Any): Boolean =
     import compiletime.asMatchable
@@ -454,3 +456,16 @@ private def envExample(): Unit =
 
   val args = Env(ID["sep"] -> ", ", ID["elements"] -> List(1, 2))
   println(exprString(jointString2[Int](args)))
+
+  import Env.KVList
+  type NIntArgs[I <: Int] <: Env.KVList = I match
+    case 0 => KVList.Empty
+    case _ => KVList.Cons["a" ++ ToString[I] & Singleton, Int, NIntArgs[I - 1]]
+
+  inline def nIntArgs[I <: Int](i: I)(using values: IndexedSeq[Int]): Env[Int]{type Shape = NIntArgs[I]} =
+    i match
+      case _: 0 => Env.empty.asInstanceOf[Env[Int]{type Shape = NIntArgs[I]}]
+      case i =>
+        val proof = ???
+        nIntArgs(constValue[(I - 1) & Singleton]).plus(ID["a" ++ ToString[I] & Singleton] -> values(i))(using proof)
+        .asInstanceOf[Env[Int]{ type Shape = NIntArgs[I] }]
