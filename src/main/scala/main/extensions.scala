@@ -14,11 +14,11 @@ extension (s: String)
   def <=>(t: String): Trit =
     math.signum(s.length - t.length) match
       case -1 => Negative
+      case 1 => Positive
       case 0 =>
         if s < t then Negative else
         if s > t then Positive
         else Neutral
-      case 1 => Positive
       case _ => throw AssertionError("Impossible case")
 
 extension (b: Boolean)

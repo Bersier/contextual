@@ -6,6 +6,7 @@ import scala.compiletime.ops.any.{!=, ToString}
 import scala.compiletime.ops.int.-
 import scala.compiletime.ops.string.+ as ++
 
+// todo TList is in different project (Fides)
 /**
   * Typeful representation of a binding environment/context
   * <br><br>
@@ -18,21 +19,21 @@ import scala.compiletime.ops.string.+ as ++
   * A normal list only keeps track of one type argument, while a tuple keeps track of the type of each of its
   * components. For example, compare:
   * {{{
-  * List(None, Some(1)): List[Option[String]]
-  * (None, Some(1)): (None, Some[String])
+  * List(None, Some(1)): List[Option[Int]]
+  * (None, Some(1)): (None, Some[Int])
   * }}}
   *
   * Similarly, a dictionary only keeps track of one key and one value type argument, while a hypothetical typeful
   * dictionary would have a type that is itself a dictionary type. For example, compare:
   * {{{
-  * Map('a' -> None, 'b' -> Some(1)): Map[Char, Option[String]]
-  * {'a' -> None, 'b' -> Some(1)}: {'a' -> None, 'b' -> Some[String]}
+  * Map('a' -> None, 'b' -> Some(1)): Map[Char, Option[Int]]
+  * {'a' -> None, 'b' -> Some(1)}: {'a' -> None, 'b' -> Some[Int]}
   * }}}
   * In the example above, `{...}` is a made up notation for typeful dictionaries, analogous to `(...)` for typeful
   * lists (aka tuples).
   * <br><br>
-  * [[Env]] represents typeful dictionaries whose keys are [[ID]]s (ideally singleton types) and whose values have a
-  * known upper type bound.
+  * [[Env]] represents typeful dictionaries whose keys are [[ID]]s
+  * and whose values share a known upper type bound.
   */
 sealed trait Env[+V] extends Map[Env.IDTop, V]:
   import Env.{AreDisjoint, ContainsKey, Extended, ID, KVList, Merged, ValueIn, Without}
@@ -67,8 +68,7 @@ sealed trait Env[+V] extends Map[Env.IDTop, V]:
   override def toString: String = s"{${representation.elementString}}"
 
   override def equals(o: Any): Boolean =
-    import compiletime.asMatchable
-    o.asMatchable match
+    o.asInstanceOf[Matchable] match
       case that: Env[?] =>
         given CanEqual[KVList, KVList] = CanEqual.derived
         this.representation == that.representation
@@ -87,7 +87,7 @@ sealed trait Env[+V] extends Map[Env.IDTop, V]:
     * Internal representation of this [[Env]]
     *
     * It is sorted by (String) key, without duplicate keys.
-  */
+    */
   protected def representation: Shape
 object Env:
   given [V](using CanEqual[V, V]) : CanEqual[Env[V], Env[V]] = CanEqual.derived
@@ -235,7 +235,7 @@ object Env:
   private final class EnvImpl[+V, S <: KVList](protected val representation: S) extends Env[V]:
     protected type Shape = S
 
-    def removed(key: IDTop): Env[V] = EnvImpl(without(representation)(using key))
+    inline def removed(key: IDTop): Env[V] = EnvImpl(without(representation)(using key))
 
     def updated[W >: V](key: IDTop, value: W): Env[W] =
       def updated(list: KVList): Cons[?, ?, ?] = list match
@@ -258,7 +258,7 @@ object Env:
           (key, value.asInstanceOf[V])
 
     def at[I <: String & Singleton](key: ID[I])(using ContainsKey[S, I] =:= true): ValueIn[Shape, I] =
-      valueIn(representation)(using key).get.asInstanceOf[ValueIn[S, I]]
+      get(key).get.asInstanceOf[ValueIn[S, I]]
 
     infix def plus[W >: V, U <: W, I <: String & Singleton](kV: (ID[I], U))
     (using ContainsKey[S, I] =:= false): Env[W]{ type Shape = Extended[S, I, U] } =
@@ -267,7 +267,7 @@ object Env:
 
     infix def minus[I <: String & Singleton](key: ID[I])
     (using ContainsKey[S, I] =:= true): Env[V]{ type Shape = Without[S, I] } =
-      EnvImpl(without(representation)(using key)).asInstanceOf[Env[V]{ type Shape = Without[S, I] }]
+      removed(key).asInstanceOf[Env[V]{ type Shape = Without[S, I] }]
 
     infix def mergedWith[W >: V, S2 <: KVList](that: Env[W]{ type Shape = S2 })
     (using AreDisjoint[S, S2] =:= true): Env[W]{ type Shape = Merged[S, S2] } =
@@ -287,6 +287,7 @@ object Env:
     case Cons(k, v, tail) => (key == k)
       .thenYield (v.asInstanceOf[V])
       .orElse (valueIn(tail), provided = key <=> k == Positive)
+  // todo define inside [[get]]?
 
   /**
     * @param list a list of key-value pairs, sorted by key, without duplicate keys
@@ -312,6 +313,7 @@ object Env:
       case Negative => list
       case Neutral  => tail
       case Positive => Cons(k, v, without(tail))
+  // todo define inside [[removed]]?
 
   /**
     * The usual merge algorithm
@@ -425,7 +427,7 @@ object Env:
     * Indicates a situation where the same key is associated with two different values.
     * @param key the ambiguous key
     */
-  class AmbiguousKeyError(key: IDTop) extends Error(key)
+  final class AmbiguousKeyError private[Env](key: IDTop) extends Error(key)
 
   /**
     * Supertype of all [[ID]]s
@@ -467,5 +469,4 @@ private def envExample(): Unit =
       case _: 0 => Env.empty.asInstanceOf[Env[Int]{type Shape = NIntArgs[I]}]
       case i =>
         val proof = ???
-        nIntArgs(constValue[(I - 1) & Singleton]).plus(ID["a" ++ ToString[I] & Singleton] -> values(i))(using proof)
-        .asInstanceOf[Env[Int]{ type Shape = NIntArgs[I] }]
+        nIntArgs(constValue[I - 1]).plus(ID[("a" ++ ToString[I]) & Singleton] -> values(i))(using proof)
