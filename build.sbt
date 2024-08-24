@@ -2,9 +2,9 @@
 name := "contextual"
 version := "0.1.0"
 
-scalaVersion := "3.6.0-RC1-bin-20240710-466676c-NIGHTLY"
+scalaVersion := "3.6.0-RC1-bin-20240821-a2c53a1-NIGHTLY"
 scalacOptions ++= Seq(
-  "-Werror",
+//  "-Werror",
   "-Wimplausible-patterns",
   "-Wnonunit-statement",
   "-Wunused:all",

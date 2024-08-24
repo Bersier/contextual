@@ -120,6 +120,7 @@ object Env:
       * @param t the tail of the new list
       */
     final case class Cons[K <: String & Singleton, +V, +T <: KVList](k: K, v: V, t: T) extends KVList:
+    // todo remove "& Singleton"?
       def elementString: String = joined(s"$k -> $v", t.elementString, ", ")
     end Cons
 
@@ -460,13 +461,20 @@ private def envExample(): Unit =
   println(exprString(jointString2[Int](args)))
 
   import Env.KVList
-  type NIntArgs[I <: Int] <: Env.KVList = I match
+
+  type NIntArgs[I <: Int] <: KVList = I match
     case 0 => KVList.Empty
     case _ => KVList.Cons["a" ++ ToString[I] & Singleton, Int, NIntArgs[I - 1]]
 
-  inline def nIntArgs[I <: Int](i: I)(using values: IndexedSeq[Int]): Env[Int]{type Shape = NIntArgs[I]} =
-    i match
-      case _: 0 => Env.empty.asInstanceOf[Env[Int]{type Shape = NIntArgs[I]}]
-      case i =>
-        val proof = ???
-        nIntArgs(constValue[I - 1]).plus(ID[("a" ++ ToString[I]) & Singleton] -> values(i))(using proof)
+  val values: IndexedSeq[Int] = ???
+
+  // todo it seems that, due to https://github.com/scala/scala3/issues/20475,
+  //  it is not possible to lift this function to return Env[Int]{type Shape = NIntArgs[I]}.
+  //  A workaround might be to have KVList extend Env directly?
+  inline def nIntArgs[I <: Int](i: I): NIntArgs[I] = inline i match
+    case _: 0 => KVList.Empty
+    case _ => KVList.Cons(
+      k = constValue["a" ++ ToString[I] & Singleton],
+      v = values(i),
+      t = nIntArgs(constValue[I - 1]),
+    )
