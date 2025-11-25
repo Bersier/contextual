@@ -1,6 +1,7 @@
 package main
 
 import java.util.NoSuchElementException
+import scala.annotation.publicInBinary
 import scala.compiletime.constValue
 import scala.compiletime.ops.any.{!=, ToString}
 import scala.compiletime.ops.int.-
@@ -36,7 +37,7 @@ import scala.compiletime.ops.string.+ as ++
   * and whose values share a known upper type bound.
   */
 sealed trait Env[+V] extends Map[Env.IDTop, V]:
-  import Env.{AreDisjoint, ContainsKey, Extended, ID, KVList, Merged, ValueIn, Without}
+  import Env.*
 
   /**
     * @param key present in this [[Env]] whose corresponding value is to be retrieved
@@ -90,7 +91,7 @@ sealed trait Env[+V] extends Map[Env.IDTop, V]:
     */
   protected def representation: Shape
 object Env:
-  given [V](using CanEqual[V, V]) : CanEqual[Env[V], Env[V]] = CanEqual.derived
+  given [V] => CanEqual[V, V] => CanEqual[Env[V], Env[V]] = CanEqual.derived
 
   /**
     * List of key-value pairs, where keys are of type [[String]]
@@ -121,7 +122,7 @@ object Env:
       */
     final case class Cons[K <: String & Singleton, +V, +T <: KVList](k: K, v: V, t: T) extends KVList:
     // todo remove "& Singleton"?
-      def elementString: String = joined(s"$k -> $v", t.elementString, ", ")
+      def elementString: String = joined(s"${k: String} -> ${v.toString}", t.elementString, ", ")
     end Cons
 
     private inline def joined(h: String, t: String, inline s: String): String =
@@ -129,9 +130,8 @@ object Env:
 
     given CanEqual[KVList, Empty] = CanEqual.derived
     given CanEqual[Empty, KVList] = CanEqual.derived
-    given [H1, H2, T1 <: KVList, T2 <: KVList](using
-      CanEqual[H1, H2], CanEqual[T1, T2],
-    ): CanEqual[Cons[?, H1, T1], Cons[?, H2, T2]] = CanEqual.derived
+    given [H1, H2, T1 <: KVList, T2 <: KVList] =>
+    CanEqual[H1, H2] => CanEqual[T1, T2] => CanEqual[Cons[?, H1, T1], Cons[?, H2, T2]] = CanEqual.derived
   end KVList
   import KVList.{Cons, Empty}
 
@@ -157,7 +157,7 @@ object Env:
       */
     inline def apply[I <: String & Singleton]: ID[I] = constValue[I]
 
-    given [S <: String & Singleton]: Conversion[S, ID[S]] = s => apply(s)
+    given [S <: String & Singleton] => Conversion[S, ID[S]] = s => apply(s)
     given CanEqual[IDTop, IDTop] = CanEqual.derived
   end ID
 
@@ -233,7 +233,7 @@ object Env:
 
   import Trit.*
 
-  private final class EnvImpl[+V, S <: KVList](protected val representation: S) extends Env[V]:
+  private final class EnvImpl[+V, S <: KVList](@publicInBinary protected val representation: S) extends Env[V]:
     protected type Shape = S
 
     inline def removed(key: IDTop): Env[V] = EnvImpl(without(representation)(using key))
@@ -283,7 +283,7 @@ object Env:
     * @param key whose associated value is to be returned
     * @return the value associated to the given key in the given list, if present
     */
-  private def valueIn[V](list: KVList)(implicit key: String): Option[V] = list match
+  @publicInBinary protected def valueIn[V](list: KVList)(using key: String): Option[V] = list match
     case Empty => None
     case Cons(k, v, tail) => (key == k)
       .thenYield (v.asInstanceOf[V])
@@ -308,7 +308,7 @@ object Env:
     * @param list a list of key-value pairs, sorted by key, without duplicate keys
     * @return a new list, without the given key
     */
-  private def without[V](list: KVList)(using key: IDTop): KVList = list match
+  @publicInBinary protected def without[V](list: KVList)(using key: IDTop): KVList = list match
     case Empty => list
     case Cons(k, v, tail) => key <=> k match
       case Negative => list
@@ -440,6 +440,7 @@ end Env
 private def envExample(): Unit =
   import Env.ID
   import ID.given
+
   import scala.language.implicitConversions
 
   println(Env.empty)

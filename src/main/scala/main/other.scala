@@ -2,7 +2,7 @@ package main
 
 import scala.compiletime.codeOf
 
-inline def exprString(inline expression: Any): String = s"${codeOf(expression)} = $expression"
+inline def exprString(inline expression: Any): String = s"${codeOf(expression)} = ${expression.toString}"
 
 enum Trit:
   case Negative, Neutral, Positive

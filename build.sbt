@@ -2,16 +2,25 @@
 name := "contextual"
 version := "0.1.0"
 
-scalaVersion := "3.6.0-RC1-bin-20240821-a2c53a1-NIGHTLY"
+scalaVersion := "3.8.1-RC1-bin-20251123-91351e3-NIGHTLY"
+resolvers += Resolver.scalaNightlyRepository
 scalacOptions ++= Seq(
-//  "-Werror",
+  "-Wenum-comment-discard",
   "-Wimplausible-patterns",
+  "-Winfer-union",
   "-Wnonunit-statement",
+  "-Wrecurse-with-default",
+  "-Wsafe-init",
+  "-Wtostring-interpolated",
+  "-WunstableInlineAccessors",
   "-Wunused:all",
+  "-Wvalue-discard",
+  "-Wwrong-arrow",
+  "-Xcook-docs",
+  "-Xkind-projector:underscores",
   "-Ycheck-all-patmat",
   "-Ydebug-pos",
   "-Yexplicit-nulls",
-  "-Yrequire-targetName",
   "-Ysafe-init-global",
   "-deprecation",
   "-experimental",
