@@ -1,4 +1,4 @@
-package main
+package contextual
 
 import scala.compiletime.ops.int.<
 import scala.compiletime.ops.string.{CharAt, Length, Substring}

@@ -7,7 +7,6 @@ resolvers += Resolver.scalaNightlyRepository
 scalacOptions ++= Seq(
   "-Wenum-comment-discard",
   "-Wimplausible-patterns",
-  "-Winfer-union",
   "-Wnonunit-statement",
   "-Wrecurse-with-default",
   "-Wsafe-init",
