@@ -12,7 +12,7 @@ import scala.compiletime.ops.string.+ as ++
   * Typeful representation of a binding environment/context
   * <br><br>
   * Similarly to how [[TList]] is a much more typeful version of [[collection.LinearSeq]], [[Env]] is a much more
-  * typeful version of [[Map]]`[`[[ID]]`, ?]`.
+  * typeful version of [[Map]]`[`[[Key]]`, ?]`.
   *
   * [[TList]], by the way, is very similar to [[Tuple]], except that it additionally keeps track of an upper bound,
   * which allows it to extend [[collection.LinearSeq]].
@@ -33,8 +33,10 @@ import scala.compiletime.ops.string.+ as ++
   * In the example above, `{...}` is a made up notation for typeful dictionaries, analogous to `(...)` for typeful
   * lists (aka tuples).
   * <br><br>
-  * [[Env]] represents typeful dictionaries whose keys are [[ID]]s
+  * [[Env]] represents typeful dictionaries whose keys are [[Key]]s
   * and whose values share a known upper type bound.
+  *
+  * It's basically a keyed product type with upper bound.
   */
 sealed trait Env[+V] extends Map[Env.IDTop, V]:
   import Env.*
@@ -43,28 +45,28 @@ sealed trait Env[+V] extends Map[Env.IDTop, V]:
     * @param key present in this [[Env]] whose corresponding value is to be retrieved
     * @return the value bound to the given key
     */
-  def at[I <: String & Singleton](key: ID[I])(using ContainsKey[Shape, I] =:= true): ValueIn[Shape, I]
+  def at[K <: String & Singleton](key: Key[K])(using ContainsKey[Shape, K] =:= true): ValueIn[Shape, K]
 
   /**
     * @param kV a key-value binding, whose key is absent from this [[Env]]
     * @return a new [[Env]] that additionally contains the given binding
     */
-  infix def plus[W >: V, U <: W, I <: String & Singleton](kV: (ID[I], U))
-  (using ContainsKey[Shape, I] =:= false): Env[W]{ type Shape = Extended[Env.this.Shape, I, U] }
+  infix def plus[U, K <: String & Singleton](kV: (Key[K], U))
+  (using ContainsKey[Shape, K] =:= false): Env[U | V]{ type Shape = Extended[Env.this.Shape, K, U] }
 
   /**
     * @param key present in [[Env]], to be removed
     * @return a new [[Env]] without the given key
     */
-  infix def minus[I <: String & Singleton](key: ID[I])
-  (using ContainsKey[Shape, I] =:= true): Env[V]{ type Shape = Without[Env.this.Shape, I] }
+  infix def minus[K <: String & Singleton](key: Key[K])
+  (using ContainsKey[Shape, K] =:= true): Env[V]{ type Shape = Without[Env.this.Shape, K] }
 
   /**
     * @param that another [[Env]], whose keys are disjoint from this one
     * @return the union of this and that [[Env]]
     */
-  infix def mergedWith[W >: V, S2 <: KVList](that: Env[W]{ type Shape = S2 })
-  (using AreDisjoint[Shape, S2] =:= true): Env[W]{ type Shape = Merged[Env.this.Shape, S2] }
+  infix def mergedWith[W, S2 <: KVList](that: Env[W]{ type Shape = S2 })
+  (using AreDisjoint[Shape, S2] =:= true): Env[V | W]{ type Shape = Merged[Env.this.Shape, S2] }
 
   override def toString: String = s"{${representation.elementString}}"
 
@@ -138,28 +140,28 @@ object Env:
   /**
     * Represents identifiers.
     */
-  opaque type ID[+I <: String] = I
-  object ID:
+  opaque type Key[+K <: String] = K
+  object Key:
 
     /**
-      * @return an ID from the given [[Long]]
+      * @return a [[Key]] from the given [[Long]]
       */
-    inline def from(i: Long): ID[ToString[i.type]] =
+    inline def from(i: Long): Key[ToString[i.type]] =
       apply(constValue[ToString[i.type]])
 
     /**
-      * @return an ID from the given [[String]]
+      * @return a [[Key]] from the given [[String]]
       */
-    inline def apply(i: String): ID[i.type] = i
+    inline def apply(i: String): Key[i.type] = i
 
     /**
-      * @return an ID from the given [[String]] singleton type
+      * @return a [[Key]] from the given [[String]] singleton type
       */
-    inline def apply[I <: String & Singleton]: ID[I] = constValue[I]
+    inline def apply[K <: String & Singleton]: Key[K] = constValue[K]
 
-    given [S <: String & Singleton] => Conversion[S, ID[S]] = s => apply(s)
+    given [S <: String & Singleton] => Conversion[S, Key[S]] = s => apply(s)
     given CanEqual[IDTop, IDTop] = CanEqual.derived
-  end ID
+  end Key
 
   /**
     * @return the empty [[Env]]
@@ -169,13 +171,13 @@ object Env:
   /**
     * @return a new [[Env]] containing the given key-value pair
     */
-  def apply[I <: String & Singleton, V](kV: (ID[I], V)): Env[V]{ type Shape = Cons[I, V, Empty] } =
+  def apply[K <: String & Singleton, V](kV: (Key[K], V)): Env[V]{ type Shape = Cons[K, V, Empty] } =
     EnvImpl(Cons(kV._1, kV._2, Empty))
 
   /**
     * @return a new [[Env]] containing the two given key-value pairs
     */
-  def apply[I1 <: String & Singleton, V1, I2 <: String & Singleton, V2](kV1: (ID[I1], V1), kV2: (ID[I2], V2))
+  def apply[I1 <: String & Singleton, V1, I2 <: String & Singleton, V2](kV1: (Key[I1], V1), kV2: (Key[I2], V2))
   (using (I1 != I2) =:= true): Env[V1 | V2]{ type Shape = Extended[Cons[I1, V1, Empty], I2, V2] } =
     EnvImpl(extended(apply(kV1).representation, kV2._1, kV2._2, duplicateKeyThrower))
       .asInstanceOf[Env[V1 | V2]{ type Shape = Extended[Cons[I1, V1, Empty], I2, V2] }]
@@ -184,7 +186,7 @@ object Env:
     * @return a new [[Env]] containing the three given key-value pairs
     */
   def apply[I1 <: String & Singleton, V1, I2 <: String & Singleton, V2, I3 <: String & Singleton, V3]
-  (kV1: (ID[I1], V1), kV2: (ID[I2], V2), kV3: (ID[I3], V3))
+  (kV1: (Key[I1], V1), kV2: (Key[I2], V2), kV3: (Key[I3], V3))
   (using (I1 != I2) =:= true, (I1 != I3) =:= true, (I2 != I3) =:= true): Env[V1 | V2 | V3]{
     type Shape = Extended[Extended[Cons[I1, V1, Empty], I2, V2], I3, V3]
   } = EnvImpl(extended(apply(kV1, kV2).representation, kV3._1, kV3._2, duplicateKeyThrower))
@@ -198,7 +200,7 @@ object Env:
     I2 <: String & Singleton, V2,
     I3 <: String & Singleton, V3,
     I4 <: String & Singleton, V4,
-  ](kV1: (ID[I1], V1), kV2: (ID[I2], V2), kV3: (ID[I3], V3), kV4: (ID[I4], V4))
+  ](kV1: (Key[I1], V1), kV2: (Key[I2], V2), kV3: (Key[I3], V3), kV4: (Key[I4], V4))
   (using
     (I1 != I2) =:= true, (I1 != I3) =:= true, (I1 != I4) =:= true,
     (I2 != I3) =:= true, (I2 != I4) =:= true, (I3 != I4) =:= true,
@@ -218,7 +220,7 @@ object Env:
     I3 <: String & Singleton, V3,
     I4 <: String & Singleton, V4,
     I5 <: String & Singleton, V5,
-  ](kV1: (ID[I1], V1), kV2: (ID[I2], V2), kV3: (ID[I3], V3), kV4: (ID[I4], V4), kV5: (ID[I5], V5))
+  ](kV1: (Key[I1], V1), kV2: (Key[I2], V2), kV3: (Key[I3], V3), kV4: (Key[I4], V4), kV5: (Key[I5], V5))
   (using
     (I1 != I2) =:= true, (I1 != I3) =:= true, (I1 != I4) =:= true, (I1 != I5) =:= true,
     (I2 != I3) =:= true, (I2 != I4) =:= true, (I2 != I5) =:= true,
@@ -258,22 +260,22 @@ object Env:
           remaining = tail
           (key, value.asInstanceOf[V])
 
-    def at[I <: String & Singleton](key: ID[I])(using ContainsKey[S, I] =:= true): ValueIn[Shape, I] =
-      get(key).get.asInstanceOf[ValueIn[S, I]]
+    def at[K <: String & Singleton](key: Key[K])(using ContainsKey[S, K] =:= true): ValueIn[Shape, K] =
+      get(key).get.asInstanceOf[ValueIn[S, K]]
 
-    infix def plus[W >: V, U <: W, I <: String & Singleton](kV: (ID[I], U))
-    (using ContainsKey[S, I] =:= false): Env[W]{ type Shape = Extended[S, I, U] } =
+    infix def plus[U, K <: String & Singleton](kV: (Key[K], U))
+    (using ContainsKey[S, K] =:= false): Env[U | V]{ type Shape = Extended[S, K, U] } =
       EnvImpl(extended(representation, kV._1, kV._2, duplicateKeyThrower))
-        .asInstanceOf[Env[W]{ type Shape = Extended[S, I, U] }]
+        .asInstanceOf[Env[U | V]{ type Shape = Extended[S, K, U] }]
 
-    infix def minus[I <: String & Singleton](key: ID[I])
-    (using ContainsKey[S, I] =:= true): Env[V]{ type Shape = Without[S, I] } =
-      removed(key).asInstanceOf[Env[V]{ type Shape = Without[S, I] }]
+    infix def minus[K <: String & Singleton](key: Key[K])
+    (using ContainsKey[S, K] =:= true): Env[V]{ type Shape = Without[S, K] } =
+      removed(key).asInstanceOf[Env[V]{ type Shape = Without[S, K] }]
 
-    infix def mergedWith[W >: V, S2 <: KVList](that: Env[W]{ type Shape = S2 })
-    (using AreDisjoint[S, S2] =:= true): Env[W]{ type Shape = Merged[S, S2] } =
+    infix def mergedWith[W, S2 <: KVList](that: Env[W]{ type Shape = S2 })
+    (using AreDisjoint[S, S2] =:= true): Env[V | W]{ type Shape = Merged[S, S2] } =
       EnvImpl(merged(representation, that.representation)(using duplicateKeyThrower))
-        .asInstanceOf[Env[W]{ type Shape = Merged[S, S2] }]
+        .asInstanceOf[Env[V | W]{ type Shape = Merged[S, S2] }]
   end EnvImpl
 
   private val duplicateKeyThrower: (Any, Any) => Nothing = (_, _) => throw AssertionError("Duplicate key")
@@ -344,6 +346,11 @@ object Env:
     * Converts a [[Tuple]] type to an [[Env]] type.
     */
   type EnvT[T <: Tuple] = Env[?]{ type Shape = FromTuple[T] }
+
+  type Shape[E <: Env[?]] <: KVList = E match
+    case GEnv[s] => s
+
+  private type GEnv[S <: KVList] = Env[?]{ type Shape = S }
 
   /**
     * Converts a [[Tuple]] type to a sorted [[KVList]] type.
@@ -431,22 +438,22 @@ object Env:
   final class AmbiguousKeyError private[Env](key: IDTop) extends Error(key)
 
   /**
-    * Supertype of all [[ID]]s
+    * Supertype of all [[Key]]s
     */
-  private type IDTop = ID[String]
+  private type IDTop = Key[String]
 end Env
 
 @main
 private def envExample(): Unit =
-  import Env.ID
-  import ID.given
+  import Env.Key
+  import Key.given
 
   import scala.language.implicitConversions
 
   println(Env.empty)
-  println(Env.empty plus (ID("one") -> None))
-  println(Env.empty plus (ID("one") -> None) plus (ID("two") -> Some(1)))
-  println(Env.empty plus (ID("one") -> None) minus ID("one"))
+  println(Env.empty plus (Key("one") -> None))
+  println(Env.empty plus (Key("one") -> None) plus (Key("two") -> Some(1)))
+  println(Env.empty plus (Key("one") -> None) minus Key("one"))
 
   def jointString1[T](elements: List[T], sep: String): String =
     elements.map(_.toString).mkString(sep)
@@ -458,7 +465,7 @@ private def envExample(): Unit =
     val elements = args.at("elements")
     elements.map(_.toString).mkString(sep)
 
-  val args = Env(ID["sep"] -> ", ", ID["elements"] -> List(1, 2))
+  val args = Env(Key["sep"] -> ", ", Key["elements"] -> List(1, 2))
   println(exprString(jointString2[Int](args)))
 
   import Env.KVList
@@ -479,3 +486,17 @@ private def envExample(): Unit =
       v = values(i),
       t = nIntArgs(constValue[I - 1]),
     )
+
+  type NIntEnv[I <: Int] <: Env[Int] = I match
+    case 0 => Env.empty.type
+    case _ => Env[Int]{ type Shape = Env.Extended[Env.Shape[NIntEnv[I - 1]], ("a" ++ ToString[I]) & Singleton, Int] }
+
+  inline def nIntEnv[I <: Int](i: I): NIntEnv[I] = i match
+    case _: 0 => Env.empty
+    case _ =>
+      val dijointnessProof = ???
+      inline val binding: (Key[("a" ++ ToString[I]) & Singleton], Int) =
+        Key[("a" ++ ToString[I]) & Singleton] -> values(i)
+      val r: Env[Int]{ type Shape = Env.Extended[Env.Shape[NIntEnv[I - 1]], ("a" ++ ToString[I]) & Singleton, Int] } =
+        nIntEnv(constValue[I - 1]).plus(binding)(using dijointnessProof) // todo compile-error on this line
+      r
