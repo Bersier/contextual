@@ -77,7 +77,7 @@ object KVList:
       case true => L
       case false => IsSmallerThan[k, K] match
         case true => Cons[k, v, Without[tail, K]]
-        case false => tail & KVList
+        case false => tail
 
   /**
     * Merges the two given disjoint sorted lists.
