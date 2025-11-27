@@ -19,7 +19,9 @@ type IsSmallerThan[S1 <: String, S2 <: String] <: Boolean = Length[S1] < Length[
           case false => IsSmallerThan[Substring[S1, 1, Length[S1]], Substring[S2, 1, Length[S2]]]
 
 /**
- * Converts a Char to an Int at the type level.
+ * Converts a [[Char]] to an [[Int]] at the type level.
+ *
+ * Only handles the 95 printable ASCII characters.
  */
 type IntFromChar[C <: Char] <: Int = C match
   case ' ' => 32

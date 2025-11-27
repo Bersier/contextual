@@ -1,7 +1,7 @@
 package contextual
 
 /**
-  * List of key-value pairs, where keys are of type [[String]]
+  * Typeful list of key-value pairs, where keys are of type [[String]]
   */
 sealed trait KVList:
   override def toString: String = s"KVList(${elements.mkString(", ")})"
